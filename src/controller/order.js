@@ -142,7 +142,7 @@ router.post("/update-status", async (req, res, next) => {
         return res.send(apiResponse(400, "Không thể huỷ đơn hàng đã được xác nhận"));
       }
       order.status = status;
-      order.finish_at = new Date();
+      order.finished_at = new Date();
       const orderDetail = await OrderDetails.findAll({
         where: {
           order_id: id
@@ -163,11 +163,10 @@ router.post("/update-status", async (req, res, next) => {
           transaction
         })
       })
-      console.log("STOP");
     } else {
       order.status = status;
       if (ORDER_STATUS[status] === "finish") {
-        order.finish_at = new Date();
+        order.finished_at = new Date();
       }
     }
     await order.save({ transaction })
