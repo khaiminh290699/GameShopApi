@@ -33,7 +33,7 @@ module.exports = class Setup {
       as: "Products",
       foreignKey: {
         name: "category_id",
-        allowNull: false
+        allowNull: true
       },
       onDelete: "SET NULL"
     });
