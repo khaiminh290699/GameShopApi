@@ -3,7 +3,8 @@ const Categories = require("./Categories");
 const Products = require("./Products");
 const Properties = require("./Properties");
 const Coupons = require("./Coupons");
-const Promotions = require("./Promotions");
+const CouponProductApply = require("./CouponProductApply");
+const CouponCatogryApply = require("./CouponCatogryApply")
 const Orders = require("./Orders");
 const OrderDetails = require("./OrderDetails");
 
@@ -13,7 +14,8 @@ module.exports = {
   Products,
   Properties,
   Coupons,
-  Promotions,
+  CouponProductApply,
+  CouponCatogryApply,
   Orders,
   OrderDetails
 }

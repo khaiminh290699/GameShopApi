@@ -17,11 +17,11 @@ const Coupons = (sequelize) => {
       allowNull: false,
       unique:true
     },
-    banner: {
-      type: DataTypes.STRING,
-      allowNull: false,
-    },
     discount: {
+      type: DataTypes.FLOAT,
+      allowNull: false
+    },
+    max_discount: {
       type: DataTypes.FLOAT,
       allowNull: false
     },
@@ -45,6 +45,15 @@ const Coupons = (sequelize) => {
       type: DataTypes.DATE,
       allowNull: false,
     },
+    code: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true
+    },
+    banner: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    }
   })
 }
 

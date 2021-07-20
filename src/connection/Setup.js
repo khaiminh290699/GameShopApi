@@ -1,5 +1,5 @@
 const Connection = require("./Connection");
-const { Contacts, Categories, Products, Properties, Coupons, Promotions, Orders, OrderDetails } = require("../models/index");
+const { Contacts, Categories, Products, Properties, Coupons, CouponProductApply, CouponCatogryApply, Orders, OrderDetails } = require("../models/index");
 const { hash } = require("../ultilities/encryption");
 
 module.exports = class Setup {
@@ -57,23 +57,60 @@ module.exports = class Setup {
     });
 
     const coupons = Coupons(sequelize);
+    const coupon_product_apply = CouponProductApply(sequelize);
+    const coupon_category_apply = CouponCatogryApply(sequelize);
 
-    const promotions = Promotions(sequelize);
-
-    promotions.hasMany(products, {
-      as: "Products",
+    coupons.hasMany(coupon_product_apply, {
+      as: "CouponProductApply",
       foreignKey: {
-        name: "promotion_id",
-        allowNull: true
-      },
-      onDelete: "SET NULL"
-    });
+        name: "coupon_id",
+        allowNull: false
+      }
+    })
 
+    coupon_product_apply.belongsTo(coupons, {
+      as: "Coupon",
+      foreignKey: "coupon_id"
+    })
 
-    products.belongsTo(promotions, {
-      as: "Promotion",
-      foreignKey: "promotion_id"
-    });
+    products.hasMany(coupon_product_apply, {
+      as: "CouponProductApplys",
+      foreignKey: {
+        name: "product_id",
+        allowNull: false
+      }
+    })
+
+    coupon_product_apply.belongsTo(products, {
+      as: "Product",
+      foreignKey: "product_id"
+    })
+
+    coupons.hasMany(coupon_category_apply, {
+      as: "CouponCategoryApplys",
+      foreignKey: {
+        name: "coupon_id",
+        allowNull: false
+      }
+    })
+
+    coupon_category_apply.belongsTo(coupons, {
+      as: "Coupon",
+      foreignKey: "coupon_id"
+    })
+
+    categories.hasMany(coupon_category_apply, {
+      as: "CouponCategoryApply",
+      foreignKey: {
+        name: "category_id",
+        allowNull: false
+      }
+    })
+
+    coupon_category_apply.belongsTo(categories, {
+      as: "Category",
+      foreignKey: "category_id"
+    })
 
     const orders = Orders(sequelize);
     const orderDetails = OrderDetails(sequelize);
@@ -131,20 +168,7 @@ module.exports = class Setup {
       foreignKey: "product_id"
     });
 
-    promotions.hasMany(orderDetails, {
-      as: "OrderDetails",
-      foreignKey: {
-        name: "promotion_id",
-        allowNull: true
-      },
-    })
-
-    orderDetails.belongsTo(promotions, {
-      as: "Promotion",
-      foreignKey: "promotion_id"
-    });
-
-    await sequelize.sync();
+    await sequelize.sync({ force: true })
 
     await this.initAdmin(contacts);
   }
