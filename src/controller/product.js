@@ -219,37 +219,6 @@ router.post("/update-properties", async (req, res, next) => {
   }
 });
 
-router.post("/price-calculate", async (req, res, next) => {
-  const connection = Connection.getConnection();
-  const { Products } = connection.models;
-  try {
-    const { id, amount } = req.body;
-    const product = await Products.findOne({
-      where: {
-        id
-      },
-      include: [{
-        association: Products.associations.Promotions,
-        as: "Promotions"
-      }],
-      transaction
-    })
-    if (!product) {
-      return res.send(apiResponse(404, "Product not found"));
-    }
-    let price = 0 
-    if (product.Promotions) {
-      const { discount, current } = product.Promotions;
-      price = discountCalculate(amount * product.price, discount, current);
-    } else {
-      price = product.price * amount;
-    }
-    return res.send(apiResponse(200, "Success", { price, product_id: id, amount, promotion_id : product.Promotions ? product.Promotions.id : null  }))
-  } catch (err) {
-    next(err)
-  }
-})
-
 router.post("/get-by-ids", async (req, res, next) => {
   const connection = Connection.getConnection();
   const { Products } = connection.models;
