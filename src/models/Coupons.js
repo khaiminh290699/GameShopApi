@@ -53,6 +53,11 @@ const Coupons = (sequelize) => {
     banner: {
       type: DataTypes.STRING,
       allowNull: false,
+    },
+    apply: {
+      type: DataTypes.JSONB,
+      allowNull: false,
+      defaultValue: {}
     }
   })
 }

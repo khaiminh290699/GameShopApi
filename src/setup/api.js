@@ -89,6 +89,7 @@ module.exports = {
     schema: joi.object().keys({
       address: joi.string().required(),
       phone_number: joi.string().required(),
+      code: joi.string(),
       products: joi.array().items(
         joi.object().keys({
           product_id: joi.string().required(),

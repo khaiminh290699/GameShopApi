@@ -4,7 +4,7 @@ const discountCalculate = (price, discount, current) => {
       return price;
     }
     case 1: {
-      return price - (price * discount);
+      return price - (price * discount / 100);
     }
     case 2: {
       return price - discount;

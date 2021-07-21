@@ -11,16 +11,32 @@ const router = express.Router();
 
 router.post("/create", async (req, res, next) => {
   const connection = Connection.getConnection();
-  const { Orders, Promotions, Products, OrderDetails } = connection.models;
+  const { Orders, Coupons, Products, OrderDetails } = connection.models;
   const transaction = await connection.transaction();
   try{
-    const { coupon_id, products, address, phone_number } = req.body;
+    const { code, products, address, phone_number } = req.body;
     const { id: contact_id } = req.user;
-    let coupons;
-    if (coupon_id) {
-      coupons = await Coupons.findOne({
+    let coupon;
+    if (code) {
+      coupon = await Coupons.findOne({
+        include: [{
+          association: Coupons.associations.CouponProductApply,
+          where: [{
+            deleted_at: {
+              [Op.eq]: null
+            }
+          }],
+          required:false
+        }, {
+          association: Coupons.associations.CouponCategoryApply,
+          where: [{
+            deleted_at: {
+              [Op.eq]: null
+            }
+          }],
+          required:false
+        }],
         where: {
-          id: coupon_id,
           expiry_at: {
             [Op.gte]: new Date()
           },
@@ -30,50 +46,61 @@ router.post("/create", async (req, res, next) => {
           amount: {
             [Op.not]: 0
           },
-          is_deleted: false
+          code: { [Op.eq]: code },
+          is_deleted: { [Op.eq]: false }
         }
       })
-      if (!coupons) {
-        transaction.commit();
-        return res.send(apiResponse(400, "Coupon is invalid"))
+      if (!coupon) {
+        await transaction.commit();
+        return res.send(apiResponse(404, "Coupon is invalid"));
       }
     }
     
     const orderDtailes = [];
-    let total_price = 0;
+    let totalPrice = 0;
     await executeEach(products, async (product) => {
-      const { product_id, promotion_id, amount } = product;
-      const existProduct = await Products.findOne({ where: { id: product_id } });
+      const { product_id, amount } = product;
+      const existProduct = await Products.findOne({ 
+        include: [{
+          association: Products.associations.Category,
+          as: "Category"
+        }],
+        where: { id: product_id } 
+      });
       if (!existProduct) {
-        transaction.commit();
         return res.send(apiResponse(404, `Product not found`))
       }
       if (existProduct.is_deleted) {
-        transaction.commit();
-        return res.send(apiResponse(404, `Product ${existProduct.title} is deleted`))
+        return res.send(apiResponse(400, `Product ${existProduct.title} is deleted`))
       }
       if (existProduct.stock < amount) {
-        transaction.commit();
-        return res.send(apiResponse(404, `Stock of ${ existProduct.title } not enough `))
+        return res.send(apiResponse(400, `Stock of ${ existProduct.title } not enough`))
       }
-      let promotion;
-
-      if (promotion_id) {
-        promotion = await Promotions.findOne({
-          where: {
-            id: promotion_id,
-            expiry_at: {
-              [Op.gte]: new Date()
-            },
-            effect_at: {
-              [Op.lte]: new Date()
-            },
-            is_deleted: false,
+      if (coupon) {
+        const { product_apply, product_no_apply, category_apply, category_no_apply } = coupon.apply;
+        let valid = false;
+        for (let i = 0; i < product_no_apply.length; i ++) {
+          if (product_no_apply[i] === existProduct.id) {
+            return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
+          } 
+        }
+        for (let i = 0; i < category_no_apply.length; i ++) {
+          if (category_no_apply[i] === existProduct.id) {
+            return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
+          } 
+        }
+        for (let i = 0; i < product_apply.length; i ++) {
+          if (product_apply[i] === existProduct.id) {
+            valid = true;
           }
-        })
-        if (!promotion || !promotion.product_ids.includes(product_id)) {
-          transaction.commit();
-          return res.send(apiResponse(400, "Promotion is invalid"))
+        }
+        for (let i = 0; i < category_apply.length; i ++) {
+          if (category_apply[i] === existProduct.Category.id) {
+            valid = true;
+          }
+        }
+        if (!valid) {
+          return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
         }
       }
 
@@ -83,25 +110,31 @@ router.post("/create", async (req, res, next) => {
       })
 
       const original_price = amount * existProduct.price;
-      const price_after_promotion = discountCalculate(original_price, promotion ? promotion.discount : 0, promotion ? promotion.current : 0);
+
       orderDtailes.push({
         original_price,
-        total_price: price_after_promotion,
+        total_price: original_price,
         amount,
-        product_id,
-        promotion_id
+        product_id
       })
-      total_price += price_after_promotion;
       
+      totalPrice += existProduct.price * amount;
     })
-    
-    const price_after_promotion = discountCalculate(total_price, coupons ? coupons.discount : 0, coupons ? coupons.current : 0);
+
+    let priceAfterCoupon = totalPrice;
+    if (coupon) {
+      priceAfterCoupon = discountCalculate(totalPrice, coupon.discount, coupon.current);
+      const amountDiscount = totalPrice - priceAfterCoupon;
+      if (amountDiscount > coupon.max_discount) {
+        priceAfterCoupon = totalPrice - coupon.max_discount;
+      }
+    }
 
     const order = await Orders.create({
-      original_price: total_price,
-      total_price: price_after_promotion,
+      original_price: totalPrice,
+      total_price: priceAfterCoupon,
       contact_id,
-      coupon_id,
+      coupon_id: coupon ? coupon.id : null,
       address, 
       phone_number
     }, {
@@ -114,10 +147,18 @@ router.post("/create", async (req, res, next) => {
       transaction
     })
 
+    if (coupon) {
+      coupon.amount -= 1;
+      await coupon.save({
+        transaction
+      })
+    }
+
     await transaction.commit();
     return res.send(apiResponse(200, "Success", {
       order,
-      details
+      details,
+      coupon
     }))
   } catch(err) {
     await transaction.rollback();

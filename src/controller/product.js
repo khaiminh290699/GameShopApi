@@ -49,9 +49,6 @@ router.post("/list", async (req, res, next) => {
       include: [{
         association: Products.associations.Category,
         as: "Category",
-      },{
-        association: Products.associations.Promotion,
-        as: "Promotion",
       }]
     });
     return res.send(apiResponse(200, "Success", list))
