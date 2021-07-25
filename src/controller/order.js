@@ -19,23 +19,6 @@ router.post("/create", async (req, res, next) => {
     let coupon;
     if (code) {
       coupon = await Coupons.findOne({
-        include: [{
-          association: Coupons.associations.CouponProductApply,
-          where: [{
-            deleted_at: {
-              [Op.eq]: null
-            }
-          }],
-          required:false
-        }, {
-          association: Coupons.associations.CouponCategoryApply,
-          where: [{
-            deleted_at: {
-              [Op.eq]: null
-            }
-          }],
-          required:false
-        }],
         where: {
           expiry_at: {
             [Op.gte]: new Date()
@@ -58,8 +41,8 @@ router.post("/create", async (req, res, next) => {
     
     const orderDtailes = [];
     let totalPrice = 0;
-    await executeEach(products, async (product) => {
-      const { product_id, amount } = product;
+    for (let i = 0; i < products.length; i++) {
+      const { product_id, amount } = products[i];
       const existProduct = await Products.findOne({ 
         include: [{
           association: Products.associations.Category,
@@ -119,7 +102,7 @@ router.post("/create", async (req, res, next) => {
       })
       
       totalPrice += existProduct.price * amount;
-    })
+    }
 
     let priceAfterCoupon = totalPrice;
     if (coupon) {
@@ -168,7 +151,7 @@ router.post("/create", async (req, res, next) => {
 
 router.post("/update-status", async (req, res, next) => {
   const connection = Connection.getConnection();
-  const { Orders, Products, OrderDetails } = connection.models;
+  const { Orders, Products, OrderDetails, Coupon } = connection.models;
   const transaction = await connection.transaction();
   try{
     const { id, status } = req.body;
@@ -204,6 +187,9 @@ router.post("/update-status", async (req, res, next) => {
           transaction
         })
       })
+      const coupon = await Coupon.findOne({ id: order.coupon_id }, { transaction });
+      coupon.amount += 1;
+      await coupon.save({ transaction })
     } else {
       order.status = status;
       if (ORDER_STATUS[status] === "finish") {
@@ -259,9 +245,6 @@ router.get("/:id", async (req, res, next) => {
         include: [{
           association: OrderDetails.associations.Product,
           as: "Products",
-        }, {
-          association: OrderDetails.associations.Promotion,
-          as: "Promotions",
         }]
       }, {
         association: Orders.associations.Coupon,

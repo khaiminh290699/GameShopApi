@@ -3,10 +3,10 @@ const discountCalculate = (price, discount, current) => {
     case 0 : {
       return price;
     }
-    case 1: {
+    case 2: {
       return price - (price * discount / 100);
     }
-    case 2: {
+    case 1: {
       return price - discount;
     }
   }

@@ -177,8 +177,8 @@ router.post("/apply-coupon", async (req, res, next) => {
     }
     let totalPrice = 0;
     const { product_apply, product_no_apply, category_apply, category_no_apply } = coupon.apply;
-    await executeEach(products, async (product) => {
-      const { product_id, amount } = product;
+    for (let i = 0; i < products.length; i++) {
+      const { product_id, amount } = products[i];
       const existProduct = await Products.findOne({ 
         include: [{
           association: Products.associations.Category,
@@ -202,7 +202,7 @@ router.post("/apply-coupon", async (req, res, next) => {
         } 
       }
       for (let i = 0; i < category_no_apply.length; i ++) {
-        if (category_no_apply[i] === existProduct.id) {
+        if (category_no_apply[i] === existProduct.category_id) {
           return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
         } 
       }
@@ -212,7 +212,7 @@ router.post("/apply-coupon", async (req, res, next) => {
         }
       }
       for (let i = 0; i < category_apply.length; i ++) {
-        if (category_apply[i] === existProduct.Category.id) {
+        if (category_apply[i] === existProduct.category_id) {
           valid = true;
         }
       }
@@ -220,7 +220,7 @@ router.post("/apply-coupon", async (req, res, next) => {
         return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
       }
       totalPrice += existProduct.price * amount;
-    });
+    }
 
     if (totalPrice < coupon.min_total_price) {
       return res.send(apiResponse(400, `Total pirce is less then min price apply coupon`)); 
