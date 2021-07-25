@@ -77,12 +77,12 @@ router.post("/create", async (req, res, next) => {
   const { Coupons } = connection.models;
   const transaction = await connection.transaction();
   try {
-    const { title, discount , max_discount, current, amount, min_total_price, effect_at, expiry_at, banner, product_apply, product_no_apply, category_apply, category_no_apply, code } = req.body;
+    const { title, discount , max_discount, current, amount, min_total_price, effect_at, expiry_at, banner, product_apply, product_no_apply, category_apply, category_no_apply, code, description } = req.body;
     if (effect_at > expiry_at) {
       return res.send(apiResponse(400, "Effect date is greater then expiry date"));
     }
     const coupon = await Coupons.create({
-      title, discount, max_discount, current, amount, min_total_price, effect_at, expiry_at, code, banner, apply: { product_apply, product_no_apply, category_apply, category_no_apply }
+      title, discount, max_discount, current, amount, min_total_price, effect_at, expiry_at, code, banner, apply: { product_apply, product_no_apply, category_apply, category_no_apply }, description
     }, {
       transaction
     })
@@ -99,7 +99,7 @@ router.put("/update", async (req, res, next) => {
   const { Coupons } = connection.models;
   const transaction = await connection.transaction();
   try {
-    const { id, title, discount , max_discount, current, amount, min_total_price, effect_at, expiry_at, banner, product_apply, product_no_apply, category_apply, category_no_apply, code } = req.body;
+    const { id, title, discount , max_discount, current, amount, min_total_price, effect_at, expiry_at, banner, product_apply, product_no_apply, category_apply, category_no_apply, code, description } = req.body;
     if (effect_at > expiry_at) {
       return res.send(apiResponse(400, "Effect date is greater then expiry date"));
     }
@@ -119,7 +119,8 @@ router.put("/update", async (req, res, next) => {
     coupon.expiry_at = expiry_at;
     coupon.banner = banner;
     coupon.code = code;
-    coupon.apply = { product_apply, product_no_apply, category_apply, category_no_apply }
+    coupon.apply = { product_apply, product_no_apply, category_apply, category_no_apply };
+    coupon.description = description;
     await coupon.save({ transaction });
     await transaction.commit();
     return res.send(apiResponse(200, "Success", coupon))

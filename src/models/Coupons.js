@@ -58,6 +58,10 @@ const Coupons = (sequelize) => {
       type: DataTypes.JSONB,
       allowNull: false,
       defaultValue: {}
+    },
+    description: {
+      type: DataTypes.TEXT,
+      allowNull: false
     }
   })
 }
