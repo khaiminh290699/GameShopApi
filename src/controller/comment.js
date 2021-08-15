@@ -11,16 +11,22 @@ router.post("/list", async (req, res, next) => {
   const { Comments } = connection.models;
   try {
     const { limit = 10, page = 1, from = new Date() , contact_id, product_id } = req.body;
-    const list = await Comments.findAndCountAll({
-      include: [{
+    const include = [
+      {
         association: Comments.associations.Contact,
         as: "contact"
-      },{
+      }
+    ]
+    if (contact_id) {
+      include.push({
         association: Comments.associations.Likes,
         as: "like",
         where: [{contact_id}],
         required: false
-      }],
+      })
+    }
+    const list = await Comments.findAndCountAll({
+      include,
       where: [{ product_id, parent_id: null, createdAt: { [Op.lte]: from } }],
       order: [["createdAt", "DESC"]],
       limit,
@@ -37,17 +43,25 @@ router.post("/list-reply", async (req, res, next) => {
   const { Comments } = connection.models;
   try {
     const { contact_id, comment_id } = req.body;
-    const list = await Comments.findAndCountAll({
-      include: [{
+    const include = [
+      {
         association: Comments.associations.Contact,
         as: "contact",
         require: false,
-      },{
-        association: Comments.associations.Likes,
-        as: "like",
-        where: [{contact_id}],
-        required: false
-      }],
+      }
+    ]
+    if (contact_id) {
+      include.push(
+        {
+          association: Comments.associations.Likes,
+          as: "like",
+          where: [{contact_id}],
+          required: false
+        }
+      )
+    }
+    const list = await Comments.findAndCountAll({
+      include,
       where: [{
         parent_id: comment_id
       }]

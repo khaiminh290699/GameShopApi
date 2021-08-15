@@ -246,13 +246,14 @@ router.post("/top-rating", async (req, res, next) => {
   const connection = Connection.getConnection();
   const { Products } = connection.models;
   try {
-    const { top } = req.body;
+    const { top, category_id } = req.body;
     const top_rate = await Products.findAll({
       attributes: ["id", "title", "images", "stock", "price", [sequelize.fn("AVG", sequelize.col("rating")), "avg_rating"]],
       include: [{
         association: Products.associations.Rates,
         attributes: []
       }],
+      where: category_id ? { category_id } : {},
       group: [[sequelize.literal('"Products".id')], [sequelize.literal('"Products".title')], [sequelize.literal('"Products".images')], [sequelize.literal('"Products".stock')], [sequelize.literal('"Products".price')]],
       top
     })
