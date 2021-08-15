@@ -253,8 +253,9 @@ router.post("/top-rating", async (req, res, next) => {
         association: Products.associations.Rates,
         attributes: []
       }],
-      where: category_id ? { category_id } : {},
+      where: category_id ? [{ category_id }] : [{}],
       group: [[sequelize.literal('"Products".id')], [sequelize.literal('"Products".title')], [sequelize.literal('"Products".images')], [sequelize.literal('"Products".stock')], [sequelize.literal('"Products".price')]],
+      order: [[sequelize.fn("AVG", sequelize.col("rating")), "DESC NULLS LAST"]],
       top
     })
     return res.send(apiResponse(200, "Success", top_rate))
