@@ -25,7 +25,7 @@ const Coupons = (sequelize) => {
       type: DataTypes.FLOAT,
       allowNull: false
     },
-    current: {
+    currency: {
       type: DataTypes.INTEGER,
       allowNull: false
     },

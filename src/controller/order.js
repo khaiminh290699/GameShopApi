@@ -60,27 +60,19 @@ router.post("/create", async (req, res, next) => {
         return res.send(apiResponse(400, `Stock of ${ existProduct.title } not enough`))
       }
       if (coupon) {
-        const { product_apply, product_no_apply, category_apply, category_no_apply } = coupon.apply;
+        const { 
+          is_all,
+          except_category,
+          except_product,
+          apply_category,
+          apply_product 
+        } = coupon.apply;
         let valid = false;
-        for (let i = 0; i < product_no_apply.length; i ++) {
-          if (product_no_apply[i] === existProduct.id) {
-            return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
-          } 
+        if (is_all || apply_product.includes(product_id) || apply_category.include(existProduct.category_id) ) {
+          valid = true;
         }
-        for (let i = 0; i < category_no_apply.length; i ++) {
-          if (category_no_apply[i] === existProduct.id) {
-            return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
-          } 
-        }
-        for (let i = 0; i < product_apply.length; i ++) {
-          if (product_apply[i] === existProduct.id) {
-            valid = true;
-          }
-        }
-        for (let i = 0; i < category_apply.length; i ++) {
-          if (category_apply[i] === existProduct.Category.id) {
-            valid = true;
-          }
+        if (except_product.includes(product_id) || except_category.includes(existProduct.category_id)) {
+          valid = false;
         }
         if (!valid) {
           return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
@@ -106,7 +98,7 @@ router.post("/create", async (req, res, next) => {
 
     let priceAfterCoupon = totalPrice;
     if (coupon) {
-      priceAfterCoupon = discountCalculate(totalPrice, coupon.discount, coupon.current);
+      priceAfterCoupon = discountCalculate(totalPrice, coupon.discount, coupon.currency);
       const amountDiscount = totalPrice - priceAfterCoupon;
       if (amountDiscount > coupon.max_discount) {
         priceAfterCoupon = totalPrice - coupon.max_discount;
@@ -202,7 +194,6 @@ router.post("/update-status", async (req, res, next) => {
       order
     }))
   } catch(err) {
-    console.log(err)
     await transaction.rollback();
     next(err)
   }

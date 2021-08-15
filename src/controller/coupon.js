@@ -2,7 +2,6 @@ const express = require("express");
 const apiResponse = require("../ultilities/apiResponse"); 
 const Connection = require("../connection/Connection");
 const { Op } = require("sequelize");
-const { executeEach } = require("../ultilities/arrays");
 const discountCalculate = require("../ultilities/discountCalculate");
 const createWhereCondition = require("../ultilities/compare");
 
@@ -37,35 +36,42 @@ router.get("/:id", async (req, res, next) => {
     if (!coupon) {
       return res.send(apiResponse(404, "Coupon not found"));
     }
-    const { product_apply, product_no_apply, category_apply, category_no_apply } = coupon.apply;
-    const productApply = await Products.findAll({
+    const { 
+      is_all,
+      except_category,
+      except_product,
+      apply_category,
+      apply_product 
+    } = coupon.apply;
+    const applyProduct = await Products.findAll({
       where: [
-        { id: { [Op.in]: product_apply } },
+        { id: { [Op.in]: apply_product } },
         { is_deleted: { [Op.eq]: false } }
       ]
     })
-    const productNoApply = await Products.findAll({
+    const exceptProduct = await Products.findAll({
       where: [
-        { id: { [Op.in]: product_no_apply } },
+        { id: { [Op.in]: except_product } },
         { is_deleted: { [Op.eq]: false } }
       ]
     })
-    const categoryApply = await Categories.findAll({
+    const applyCategory = await Categories.findAll({
       where: [
-        { id: { [Op.in]: category_apply } }
+        { id: { [Op.in]: apply_category } }
       ]
     })
-    const categoryNoApply = await Categories.findAll({
+    const exceptCategory = await Categories.findAll({
       where: [
-        { id: { [Op.in]: category_no_apply } }
+        { id: { [Op.in]: except_category } }
       ]
     })
     return res.send(apiResponse(200, "Success", {
       coupon,
-      productApply,
-      productNoApply,
-      categoryApply,
-      categoryNoApply
+      is_all,
+      except_category: exceptCategory,
+      except_product: exceptProduct,
+      apply_category: applyCategory,
+      apply_product: applyProduct 
     }))
   } catch(err) {
     next(err)
@@ -77,12 +83,53 @@ router.post("/create", async (req, res, next) => {
   const { Coupons } = connection.models;
   const transaction = await connection.transaction();
   try {
-    const { title, discount , max_discount, current, amount, min_total_price, effect_at, expiry_at, banner, product_apply, product_no_apply, category_apply, category_no_apply, code, description } = req.body;
+    const { 
+      code,
+      title, 
+      discount, 
+      max_discount, 
+      currency, 
+      amount, 
+      min_total_price, 
+      effect_at, 
+      expiry_at, 
+      banner, 
+      description,
+      is_all = false,
+      except_category,
+      except_product,
+      apply_category,
+      apply_product
+    } = req.body;
+
     if (effect_at > expiry_at) {
+      await transaction.commit();
       return res.send(apiResponse(400, "Effect date is greater then expiry date"));
     }
+    const exist = await Coupons.findOne({ where: { code } });
+    if (exist) {
+      await transaction.commit();
+      return res.send(apiResponse(400, "Code exist"));
+    }
     const coupon = await Coupons.create({
-      title, discount, max_discount, current, amount, min_total_price, effect_at, expiry_at, code, banner, apply: { product_apply, product_no_apply, category_apply, category_no_apply }, description
+      code,
+      title, 
+      discount, 
+      max_discount, 
+      currency, 
+      amount, 
+      min_total_price, 
+      effect_at, 
+      expiry_at, 
+      banner, 
+      description,
+      apply: {
+        is_all,
+        except_category,
+        except_product,
+        apply_category,
+        apply_product
+      }
     }, {
       transaction
     })
@@ -99,9 +146,32 @@ router.put("/update", async (req, res, next) => {
   const { Coupons } = connection.models;
   const transaction = await connection.transaction();
   try {
-    const { id, title, discount , max_discount, current, amount, min_total_price, effect_at, expiry_at, banner, product_apply, product_no_apply, category_apply, category_no_apply, code, description } = req.body;
+    const { 
+      id,
+      code,
+      title, 
+      discount, 
+      max_discount, 
+      currency, 
+      amount, 
+      min_total_price, 
+      effect_at, 
+      expiry_at, 
+      banner, 
+      description,
+      is_all = false,
+      except_category,
+      except_product,
+      apply_category,
+      apply_product
+    } = req.body;
     if (effect_at > expiry_at) {
       return res.send(apiResponse(400, "Effect date is greater then expiry date"));
+    }
+    const exist = await Coupons.findOne({ where: { code, id: { [Op.ne]: id } } });
+    if (exist) {
+      await transaction.commit();
+      return res.send(apiResponse(400, "Code exist"));
     }
     const coupon = await Coupons.findOne({
       where: [{ id: { [Op.eq]: id } }]
@@ -112,14 +182,20 @@ router.put("/update", async (req, res, next) => {
     coupon.title = title;
     coupon.discount = discount;
     coupon.max_discount = max_discount;
-    coupon.current = current;
+    coupon.currency = currency;
     coupon.amount = amount;
     coupon.min_total_price = min_total_price;
     coupon.effect_at = effect_at;
     coupon.expiry_at = expiry_at;
     coupon.banner = banner;
     coupon.code = code;
-    coupon.apply = { product_apply, product_no_apply, category_apply, category_no_apply };
+    coupon.apply = { 
+      is_all,
+      except_category,
+      except_product,
+      apply_category,
+      apply_product
+    };
     coupon.description = description;
     await coupon.save({ transaction });
     await transaction.commit();
@@ -176,7 +252,13 @@ router.post("/apply-coupon", async (req, res, next) => {
       return res.send(apiResponse(404, "Coupon is invalid"));
     }
     let totalPrice = 0;
-    const { product_apply, product_no_apply, category_apply, category_no_apply } = coupon.apply;
+    const { 
+      is_all,
+      except_category,
+      except_product,
+      apply_category,
+      apply_product 
+    } = coupon.apply;
     for (let i = 0; i < products.length; i++) {
       const { product_id, amount } = products[i];
       const existProduct = await Products.findOne({ 
@@ -196,25 +278,11 @@ router.post("/apply-coupon", async (req, res, next) => {
         return res.send(apiResponse(400, `Stock of ${ existProduct.title } not enough`))
       }
       let valid = false;
-      for (let i = 0; i < product_no_apply.length; i ++) {
-        if (product_no_apply[i] === existProduct.id) {
-          return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
-        } 
+      if (is_all || apply_product.includes(product_id) || apply_category.includes(existProduct.category_id) ) {
+        valid = true;
       }
-      for (let i = 0; i < category_no_apply.length; i ++) {
-        if (category_no_apply[i] === existProduct.category_id) {
-          return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
-        } 
-      }
-      for (let i = 0; i < product_apply.length; i ++) {
-        if (product_apply[i] === existProduct.id) {
-          valid = true;
-        }
-      }
-      for (let i = 0; i < category_apply.length; i ++) {
-        if (category_apply[i] === existProduct.category_id) {
-          valid = true;
-        }
+      if (except_product.includes(product_id) || except_category.includes(existProduct.category_id)) {
+        valid = false;
       }
       if (!valid) {
         return res.send(apiResponse(400, `${ existProduct.title } is not valid for this coupon`));
@@ -225,7 +293,7 @@ router.post("/apply-coupon", async (req, res, next) => {
     if (totalPrice < coupon.min_total_price) {
       return res.send(apiResponse(400, `Total pirce is less then min price apply coupon`)); 
     }
-    let priceAfterCoupon = discountCalculate(totalPrice, coupon.discount, coupon.current);
+    let priceAfterCoupon = discountCalculate(totalPrice, coupon.discount, coupon.currency);
     const amountDiscount = totalPrice - priceAfterCoupon;
     if (amountDiscount > coupon.max_discount) {
       priceAfterCoupon = totalPrice - coupon.max_discount;

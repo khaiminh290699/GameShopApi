@@ -29,12 +29,12 @@ router.post("/list", async (req, res, next) => {
   const connection = Connection.getConnection();
   const { Categories, Products } = connection.models;
   try{
-    const { select = ["*"], wheres = {}, order, page = 0, limit = 50 } = req.body;
+    const { select = ["*"], wheres = {}, order, page = 0, limit } = req.body;
     const categories = await Categories.findAndCountAll({
       where: createWhereCondition(wheres),
       order,
       limit,
-      offset: page * limit,
+      offset: limit ? page * limit : undefined,
       attributes: select,
       raw: true
     })
@@ -62,6 +62,7 @@ router.post("/list", async (req, res, next) => {
     })
     return res.send(apiResponse(200, "Success", categories))
   } catch(err) {
+    console.log(err)
     next(err)
   }
 });

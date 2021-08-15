@@ -5,6 +5,9 @@ const Properties = require("./Properties");
 const Coupons = require("./Coupons");
 const Orders = require("./Orders");
 const OrderDetails = require("./OrderDetails");
+const Rates = require("./Rates");
+const Comments = require("./Comments");
+const Likes = require("./Likes");
 
 module.exports = {
   Contacts,
@@ -13,5 +16,8 @@ module.exports = {
   Properties,
   Coupons,
   Orders,
-  OrderDetails
+  OrderDetails,
+  Rates,
+  Comments,
+  Likes
 }

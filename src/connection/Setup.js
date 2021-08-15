@@ -1,5 +1,5 @@
 const Connection = require("./Connection");
-const { Contacts, Categories, Products, Properties, Coupons, Orders, OrderDetails } = require("../models/index");
+const { Contacts, Categories, Products, Properties, Coupons, Orders, OrderDetails, Rates, Comments, Likes } = require("../models/index");
 const { hash } = require("../ultilities/encryption");
 
 module.exports = class Setup {
@@ -114,7 +114,92 @@ module.exports = class Setup {
       foreignKey: "product_id"
     });
 
-    await sequelize.sync()
+    const rates = Rates(sequelize);
+
+    contacts.hasMany(rates, {
+      as: "Rates",
+      foreignKey: {
+        name: "contact_id",
+        allowNull: false
+      },
+    })
+
+    rates.belongsTo(contacts, {
+      as: "Contact",
+      foreignKey: "contact_id"
+    })
+
+    products.hasMany(rates, {
+      as: "Rates",
+      foreignKey: {
+        name: "product_id",
+        allowNull: false
+      },
+    })
+
+    rates.belongsTo(products, {
+      as: "Product",
+      foreignKey: "product_id"
+    })
+
+    const comments = Comments(sequelize);
+    const likes = Likes(sequelize);
+
+    products.hasMany(comments, {
+      as: "Comments",
+      foreignKey: {
+        name: "product_id",
+        allowNull: false
+      },
+    })
+
+    comments.belongsTo(products, {
+      as: "Product",
+      foreignKey: "product_id"
+    })
+
+    contacts.hasMany(comments, {
+      as: "Comments",
+      foreignKey: {
+        name: "contact_id",
+        allowNull: false
+      },
+    })
+
+    comments.belongsTo(contacts, {
+      as: "Contact",
+      foreignKey: "contact_id"
+    })
+
+    comments.hasMany(likes, {
+      as: "Likes",
+      foreignKey: {
+        name: "comment_id",
+        allowNull: false,
+      },
+      onDelete: 'CASCADE'
+    })
+
+    likes.belongsTo(comments, {
+      as: "Comment",
+      foreignKey: "comment_id",
+    })
+
+    contacts.hasMany(likes, {
+      as: "Likes",
+      foreignKey: {
+        name: "contact_id",
+        allowNull: false
+      },
+    })
+
+    likes.belongsTo(contacts, {
+      as: "Contact",
+      foreignKey: "contact_id"
+    })
+
+
+    await sequelize.sync({ force: false })
 
     await this.initAdmin(contacts);
   }

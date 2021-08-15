@@ -1,15 +1,15 @@
 const express = require("express");
 const apiResponse = require("../ultilities/apiResponse"); 
 const Connection = require("../connection/Connection");
-const { Op } = require("sequelize");
+const { Op, QueryTypes } = require("sequelize");
 const createWhereCondition = require("../ultilities/compare");
-const discountCalculate = require("../ultilities/discountCalculate");
+const sequelize = require("sequelize")
 
 const router = express.Router();
 
 router.get("/:id", async (req, res, next) => {
   const connection = Connection.getConnection();
-  const { Products } = connection.models;
+  const { Products, Rates } = connection.models;
   try{
     const { id } = req.params;
     const product = await Products.findOne({
@@ -24,10 +24,18 @@ router.get("/:id", async (req, res, next) => {
         association: Products.associations.Properties,
         as: "properties",
       }]
-    });
+    })
     if (!product) {
       return res.send(apiResponse(404, "Product not found"))
     }
+    const rating = await Rates.findOne({
+      attributes: [[sequelize.fn("AVG", sequelize.col("rating")), "avg_rating"], [sequelize.fn("COUNT", sequelize.col("id")), "total_rating"]],
+      where: {
+        product_id: id
+      },
+      group: ["product_id"]
+    })
+    product.setDataValue("rating", rating || { avg_rating: 0, total_rating: 0 })
     return res.send(apiResponse(200, "Success", product))
   } catch(err) {
     next(err)
@@ -38,12 +46,12 @@ router.post("/list", async (req, res, next) => {
   const connection = Connection.getConnection();
   const { Products } = connection.models;
   try{
-    const { select = null, wheres = {}, order, page = 0, limit = 50 } = req.body;
+    const { select = null, wheres = {}, order, page, limit } = req.body;
     const list = await Products.findAndCountAll({
       where: createWhereCondition(wheres),
       order,
       limit,
-      offset: page * limit,
+      offset: limit ? page * limit : undefined,
       attributes: "*",
       attributes: select,
       include: [{
@@ -233,5 +241,88 @@ router.post("/get-by-ids", async (req, res, next) => {
     next(err)
   }
 })
+
+router.post("/top-rating", async (req, res, next) => {
+  const connection = Connection.getConnection();
+  const { Products } = connection.models;
+  try {
+    const { top } = req.body;
+    const top_rate = await Products.findAll({
+      attributes: ["id", "title", "images", "stock", "price", [sequelize.fn("AVG", sequelize.col("rating")), "avg_rating"]],
+      include: [{
+        association: Products.associations.Rates,
+        attributes: []
+      }],
+      group: [[sequelize.literal('"Products".id')], [sequelize.literal('"Products".title')], [sequelize.literal('"Products".images')], [sequelize.literal('"Products".stock')], [sequelize.literal('"Products".price')]],
+      top
+    })
+    return res.send(apiResponse(200, "Success", top_rate))
+  } catch (err) {
+    next(err);
+  }
+})
+
+router.post("/get-rating", async (req, res, next) => {
+  const connection = Connection.getConnection();
+  const { Rates } = connection.models;
+  try {
+    const { product_id } = req.body;
+    const { id: contact_id } = req.user;
+    let rate = await Rates.findOne({
+      where: {
+        product_id,
+        contact_id
+      }
+    })
+    return res.send(apiResponse(200, "Success", rate || { rating: 0, not_rated: true }))
+  } catch (err) {
+    next(err);
+  }
+})
+
+router.post("/rating", async (req, res, next) => {
+  const connection = Connection.getConnection();
+  const { Products, Rates } = connection.models;
+  const transaction = await connection.transaction();
+  try {
+    const { product_id, rating } = req.body;
+    const { id: contact_id } = req.user;
+    const product = await Products.findOne({ 
+      where: {
+        id: product_id,
+        is_deleted: false
+      }
+    })
+    if (!product) {
+      await transaction.commit();
+      return res.send(apiResponse(404, "Product not found")) 
+    }
+    let rate = await Rates.findOne({
+      where: {
+        product_id,
+        contact_id
+      }
+    })
+    if (rate) {
+      rate.rating = rating;
+      await rate.save({
+        transaction
+      });
+    } else {
+      rate = await Rates.build({
+        contact_id,
+        product_id,
+        rating
+      }).save();
+    }
+    await transaction.commit();
+    return res.send(apiResponse(200, "Success", rate))
+  } catch (err) {
+    await transaction.rollback();
+    next(err);
+  }
+})
+
+
 
 module.exports = router;

@@ -6,6 +6,7 @@ const file = require("./file");
 const order = require("./order");
 const statistic = require("./statistic")
 const coupon = require("./coupon")
+const comment = require("./comment")
 
 const router = express.Router();
 router.use("/auth", auth)
@@ -15,5 +16,6 @@ router.use("/file", file)
 router.use("/order", order)
 router.use("/statistic", statistic)
 router.use("/coupon", coupon)
+router.use("/comment", comment)
 
 module.exports = router;
