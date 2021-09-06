@@ -245,5 +245,13 @@ module.exports = {
       product_id: joi.string().required(),
       rating: joi.number().required()
     })
+  },
+  "/product/import": {
+    authorize: true,
+    permission: 255
+  },
+  "/product/current-import": {
+    authorize: true,
+    permission: 255
   }
 }

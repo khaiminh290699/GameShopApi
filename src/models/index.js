@@ -8,6 +8,8 @@ const OrderDetails = require("./OrderDetails");
 const Rates = require("./Rates");
 const Comments = require("./Comments");
 const Likes = require("./Likes");
+const ImportGood = require("./ImportGood");
+const ImportDetail = require("./ImportDetail");
 
 module.exports = {
   Contacts,
@@ -19,5 +21,7 @@ module.exports = {
   OrderDetails,
   Rates,
   Comments,
-  Likes
+  Likes,
+  ImportGood,
+  ImportDetail,
 }

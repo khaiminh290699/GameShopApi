@@ -28,7 +28,7 @@ const authorize = async (req, res, next) => {
   const contact = await Contacts.findOne({
     where: { id: payload.id }
   })
-
+  
   if (!contact) {
     return res.send(apiResponse(403, "UnauthorizeError"))
   }

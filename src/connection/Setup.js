@@ -1,5 +1,5 @@
 const Connection = require("./Connection");
-const { Contacts, Categories, Products, Properties, Coupons, Orders, OrderDetails, Rates, Comments, Likes } = require("../models/index");
+const { Contacts, Categories, Products, Properties, Coupons, Orders, OrderDetails, Rates, Comments, Likes, ImportGood, ImportDetail } = require("../models/index");
 const { hash } = require("../ultilities/encryption");
 
 module.exports = class Setup {
@@ -196,6 +196,49 @@ module.exports = class Setup {
     likes.belongsTo(contacts, {
       as: "Contact",
       foreignKey: "contact_id"
+    })
+
+    const import_good = ImportGood(sequelize)
+    
+    contacts.hasMany(import_good, {
+      as: "ImportGood",
+      foreignKey: {
+        name: "contact_id",
+        allowNull: false
+      },
+    })
+
+    import_good.belongsTo(contacts, {
+      as: "Contact",
+      foreignKey: "contact_id"
+    })
+
+    const import_detail = ImportDetail(sequelize);
+
+    import_good.hasMany(import_detail, {
+      as: "ImportDetail",
+      foreignKey: {
+        name: "import_id",
+        allowNull: false
+      },
+    })
+
+    import_detail.belongsTo(products, {
+      as: "Product",
+      foreignKey: "product_id"
+    })
+
+    products.hasMany(import_detail, {
+      as: "ImportDetail",
+      foreignKey: {
+        name: "product_id",
+        allowNull: false
+      },
+    })
+
+    import_detail.belongsTo(import_good, {
+      as: "ImportGood",
+      foreignKey: "import_id"
     })
 
 

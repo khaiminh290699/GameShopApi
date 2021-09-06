@@ -11,5 +11,5 @@ module.exports = [
   express.json(),
   authorize,
   permission,
-  validator
+  validator,
 ]

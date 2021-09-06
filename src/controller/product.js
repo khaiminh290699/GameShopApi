@@ -3,7 +3,12 @@ const apiResponse = require("../ultilities/apiResponse");
 const Connection = require("../connection/Connection");
 const { Op, QueryTypes } = require("sequelize");
 const createWhereCondition = require("../ultilities/compare");
-const sequelize = require("sequelize")
+const sequelize = require("sequelize");
+const connectSocket = require("../ultilities/socket");
+
+const fs = require("fs");
+const parse = require('csv-parse');
+const multer = require("multer");
 
 const router = express.Router();
 
@@ -325,6 +330,204 @@ router.post("/rating", async (req, res, next) => {
   }
 })
 
+router.post("/current-import", async (req, res, next) => {
+  const { user: { id: contact_id } } = req;
+  const connection = Connection.getConnection();
+  const { ImportGood } = connection.models;
+  const importGood = await ImportGood.findOne({
+    where: [{
+      contact_id,
+      status: "waiting"
+    }]
+  })
+
+  return res.send(apiResponse(200, "Success", importGood))
+})
+
+router.post("/list-import", async (req, res, next) => {
+  const { select = null, wheres = {}, order, page, limit } = req.body;
+  const connection = Connection.getConnection();
+  const { ImportGood } = connection.models;
+  const list = await ImportGood.findAndCountAll({
+    where: createWhereCondition(wheres),
+    order,
+    limit,
+    offset: limit ? page * limit : undefined,
+    attributes: "*",
+    attributes: select,
+    include: [{
+      association: ImportGood.associations.Contact,
+      as: "Contact",
+    }]
+  });
+  return res.send(apiResponse(200, "Success", list))
+})
+
+router.post("/import-detail", async (req, res, next) => {
+  const { import_id } = req.body;
+  const connection = Connection.getConnection();
+  const { ImportGood, ImportDetail } = connection.models;
+  const importGood = await ImportGood.findOne({
+    where: [{ id: import_id }]
+  })
+  const importDetail = await ImportDetail.findAll({
+    where: [{ import_id }],
+    include: [{
+      association: ImportDetail.associations.Product,
+      as: "Products",
+    }]
+  })
+  return res.send(apiResponse(200, "Success", {
+    import_good: importGood,
+    details: importDetail,
+  }))
+})
+
+const upload = multer({ dest: "public/csv" })
+
+router.post("/import", upload.single("import"), async (req, res, next) => {
+  const { file: { filename }, user: { id: contact_id } } = req;
+  const data = await new Promise((resolve, reject) => {
+    fs.readFile(`${process.cwd()}/public/csv/${filename}`, (err, data) => {
+      if (err) return reject(err);
+      resolve(data);
+    });
+  })
+
+  const { header, records } = await new Promise((resolve, reject) => {
+    parse(data, (err, records, info) => {
+      if (err) return reject(err);
+      const header = records.shift();
+      resolve({
+        header,
+        records
+      })
+    })
+  })
+
+  if (!header.includes("ProductName") || !header.includes("Amount") || !header.includes("EachPrice")) {
+    return res.send(apiResponse(400, "Not Correct Format"));
+  }
+
+  const mapColumns = (header) => {
+    const nameIndex = header.indexOf("ProductName");
+    const amountIndex = header.indexOf("Amount");
+    const priceIndex = header.indexOf("EachPrice");
+
+    return {
+      product_name: nameIndex,
+      amount: amountIndex,
+      price: priceIndex
+    }
+
+  }
+
+  const mapColumnsIndex = mapColumns(header);
+
+  const connection = Connection.getConnection();
+  const { ImportGood } = connection.models;
+  const transaction = await connection.transaction();
+
+  try {
+    const importGood = await ImportGood.build({
+      contact_id,
+      amount_product: records.length,
+      amount_imported: 0,
+      total_price: 0,
+      status: "waiting"
+    }).save({
+      transaction
+    })
+
+    const { id: import_id } = importGood;
+
+    let imported = 0;
+    let total_price = 0;
+    let total = records.length;
+    let error = [];
+    setTimeout(async () => {
+      const { ImportGood, ImportDetail, Products } = connection.models;
+      const socket = await connectSocket("socket", "token");
+      try {
+        while(records.length) {
+          const transaction = await connection.transaction();
+
+          const chunks = records.splice(0, 1);
+  
+          const list = await Products.findAll({
+            where: [{
+              title: {
+                [Op.in]: chunks.map((chunk) => chunk[mapColumnsIndex.product_name])
+              }
+            }, {
+              is_deleted: false
+            }]
+          }, { transaction })
+
+          const lisName = [];
+          for (let i = 0; i < list.length; i++) {
+            const product = list[i];
+            const index = chunks.findIndex(chunk => chunk[mapColumnsIndex.product_name] == product.title);
+            chunk = chunks[index];
+
+            product.stock += (+chunk[mapColumnsIndex.amount]);
+            await ImportDetail.build({
+              import_id,
+              product_id: product.id,
+              amount: +chunk[mapColumnsIndex.amount],
+              each_price: +chunk[mapColumnsIndex.price]
+            }).save({ transaction })
+            await product.save({ transaction });
+            imported += 1;
+            total_price += (+chunk[mapColumnsIndex.amount]) * (+chunk[mapColumnsIndex.price]);
+            lisName.push(chunk[mapColumnsIndex.product_name]);
+          }
+
+          error.push(...chunks.filter(chunk => !lisName.includes(chunk[mapColumnsIndex.product_name])).map((item) => item[mapColumnsIndex.product_name]));
+
+
+          await socket.emit("import_goods", {
+            import_id,
+            imported,
+            total,
+            status: "waiting"
+          })
+          await ImportGood.update({ status: "waiting", amount_imported: imported }, {
+            where: { id: import_id },
+            transaction
+          })
+          await transaction.commit();
+          await new Promise((res) => {
+            setTimeout(() => res(), 2000);
+          })
+        }
+
+        await ImportGood.update({ status: "done", amount_imported: imported, total_price }, {
+          where: { id: import_id }
+        })
+
+        socket.emit("import_goods", {
+          status: "done",
+          total,
+          imported,
+          import_id,
+          total_price,
+          error
+        })
+
+        fs.unlinkSync(`${process.cwd()}/public/csv/${filename}`);
+      } catch (err) {
+        console.log(err)
+      }
+    }, 0)
+
+    await transaction.commit();
+    return res.send(apiResponse(200, "Success", importGood))
+
+  } catch (err) {
+
+  }
+})
 
 
 module.exports = router;
