@@ -386,7 +386,7 @@ router.post("/import-detail", async (req, res, next) => {
 const upload = multer({ dest: "public/csv" })
 
 router.post("/import", upload.single("import"), async (req, res, next) => {
-  const { file: { filename }, user: { id: contact_id } } = req;
+  const { file: { filename }, user: { id: contact_id, username } } = req;
   const data = await new Promise((resolve, reject) => {
     fs.readFile(`${process.cwd()}/public/csv/${filename}`, (err, data) => {
       if (err) return reject(err);
@@ -522,6 +522,9 @@ router.post("/import", upload.single("import"), async (req, res, next) => {
     }, 0)
 
     await transaction.commit();
+    importGood.setDataValue("Contact", {
+      username
+    })
     return res.send(apiResponse(200, "Success", importGood))
 
   } catch (err) {

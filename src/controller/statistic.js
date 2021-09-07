@@ -94,10 +94,21 @@ router.post("/overall", async (req, res, next) => {
         finish_status: 2
       }
     })
+
+    const total_chi = await connection.query(`
+      SELECT SUM("ImportGoods".total_price) AS total_chi FROM "ImportGoods" WHERE "ImportGoods"."status" = :done AND "ImportGoods"."createdAt" >= :from_date
+    `, {
+      type: QueryTypes.SELECT,
+      replacements: {
+        from_date,
+        done: "done"
+      }
+    })
     
     return res.send(apiResponse(200, "Success", {
       ...total_contact[0],
       ...total_profit[0],
+      ...total_chi[0]
     }))
   } catch(err) {
     next(err)
